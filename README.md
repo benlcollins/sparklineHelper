@@ -2,6 +2,8 @@
 
 A professional-grade Sidebar tool for Google Sheets that allows you to visually design and insert complex [SPARKLINE functions](https://www.benlcollins.com/spreadsheets/sparklines-in-google-sheets/) with real-time data previews.
 
+![Sparkline Helper Demo](images/sparklineHelperDemoGif.gif)
+
 ### ✨ Key Features
 
 * **Persistent Sidebar**: Stays open while you navigate between different sheets.
