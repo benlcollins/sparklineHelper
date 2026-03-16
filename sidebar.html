@@ -205,6 +205,11 @@
       </div>
     </div>
 
+    <!-- Reset Button -->
+    <div class="py-2">
+      <button onclick="resetDefaults()" class="w-full py-2 bg-red-50 text-red-700 border border-red-200 rounded text-sm font-medium hover:bg-red-100 active:scale-95 transition">Reset to Defaults</button>
+    </div>
+
     <!-- Preview Section -->
     <div class="bg-white rounded-md shadow-sm border border-gray-200 overflow-hidden">
       <div class="bg-gray-50 px-2 py-1 flex justify-between items-center border-b border-gray-200">
@@ -221,12 +226,9 @@
     </div>
 
     <!-- Actions -->
-    <div class="space-y-2 pt-2 pb-4">
-      <div class="flex gap-2">
-        <button onclick="google.script.host.close()" class="flex-1 py-2 border border-gray-300 rounded text-sm text-gray-600 font-medium hover:bg-gray-100 transition">Cancel</button>
-        <button onclick="applyFormula()" class="flex-[2] py-2 btn-sheets-green rounded shadow-md active:scale-95 transition">Insert</button>
-      </div>
-      <button onclick="resetDefaults()" class="w-full py-2 bg-red-50 text-red-700 border border-red-200 rounded text-sm font-medium hover:bg-red-100 active:scale-95 transition">Reset to Defaults</button>
+    <div class="flex gap-2 pt-4 pb-4">
+      <button onclick="google.script.host.close()" class="flex-1 py-2 border border-gray-300 rounded text-sm text-gray-600 font-medium hover:bg-gray-100 transition">Cancel</button>
+      <button onclick="applyFormula()" class="flex-[2] py-2 btn-sheets-green rounded shadow-md active:scale-95 transition">Insert</button>
     </div>
   </div>
 
@@ -337,7 +339,7 @@
         data.forEach((val, i) => {
           if (i >= 9) return;
           const segmentW = (val / total) * w;
-          ctx.fillStyle = config.barColors[i] || '#ccc';
+          ctx.fillStyle = config.barColors[i] || ((i % 2 === 0) ? '#4285F4' : '#EA4335');
           ctx.fillRect(currentX, yPos, segmentW, barH);
           currentX += segmentW;
         });
@@ -360,13 +362,13 @@
           let barHeight, y; 
           
           // Color logic with marker precedence: base/neg -> high/low -> first/last
-          ctx.fillStyle = config.color;
-          if (val < 0) ctx.fillStyle = config.negColor;
+          ctx.fillStyle = config.color || '#000000';
+          if (val < 0 && config.negColor) ctx.fillStyle = config.negColor;
           
-          if (val === minVal) ctx.fillStyle = config.lowColor;
-          if (val === maxVal) ctx.fillStyle = config.highColor;
-          if (i === 0) ctx.fillStyle = config.firstColor;
-          if (i === data.length - 1) ctx.fillStyle = config.lastColor;
+          if (val === minVal && config.lowColor) ctx.fillStyle = config.lowColor;
+          if (val === maxVal && config.highColor) ctx.fillStyle = config.highColor;
+          if (i === 0 && config.firstColor) ctx.fillStyle = config.firstColor;
+          if (i === data.length - 1 && config.lastColor) ctx.fillStyle = config.lastColor;
           
           if (isWinloss) { barHeight = h / 3; y = val > 0 ? h/2 - barHeight - 2 : h/2 + 2; }
           else { barHeight = (Math.abs(val) / maxAbs) * (h / 2); y = val > 0 ? h/2 - barHeight : h/2; }
@@ -417,7 +419,7 @@
           previewConfig.color = lineColorText;
           options.push(`"color","${lineColorText}"`);
         } else {
-          previewConfig.color = '#4285F4';
+          previewConfig.color = '#000000';
         }
         
         if (lineWidth) {
@@ -439,19 +441,19 @@
             previewConfig.barColors.push(c);
             options.push(`"color${i}","${c}"`);
           } else {
-            previewConfig.barColors.push(barColorDefaults[i-1]);
+            previewConfig.barColors.push(null);
           }
         }
         const max = document.getElementById('barMax').value;
         if (max) options.push(`"max",${max}`);
       } else {
         const keys = [
-          {id: 'colColor', opt: 'color', fallback: '#4285F4'},
-          {id: 'colNeg', opt: 'negcolor', fallback: '#EA4335'},
-          {id: 'colLow', opt: 'lowcolor', fallback: '#FBBC04'},
-          {id: 'colHigh', opt: 'highcolor', fallback: '#34A853'},
-          {id: 'colFirst', opt: 'firstcolor', fallback: '#9333ea'},
-          {id: 'colLast', opt: 'lastcolor', fallback: '#f43f5e'}
+          {id: 'colColor', opt: 'color'},
+          {id: 'colNeg', opt: 'negcolor'},
+          {id: 'colLow', opt: 'lowcolor'},
+          {id: 'colHigh', opt: 'highcolor'},
+          {id: 'colFirst', opt: 'firstcolor'},
+          {id: 'colLast', opt: 'lastcolor'}
         ];
         
         keys.forEach(k => {
@@ -459,8 +461,6 @@
           if (val) {
              previewConfig[k.id] = val;
              options.push(`"${k.opt}","${val}"`);
-          } else {
-             previewConfig[k.id] = k.fallback;
           }
         });
         
