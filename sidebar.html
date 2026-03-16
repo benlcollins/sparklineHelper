@@ -221,9 +221,12 @@
     </div>
 
     <!-- Actions -->
-    <div class="flex gap-2 pt-2 pb-4">
-      <button onclick="google.script.host.close()" class="flex-1 py-2 border border-gray-300 rounded text-sm text-gray-600 font-medium hover:bg-gray-100 transition">Cancel</button>
-      <button onclick="applyFormula()" class="flex-[2] py-2 btn-sheets-green rounded shadow-md active:scale-95 transition">Insert</button>
+    <div class="space-y-2 pt-2 pb-4">
+      <div class="flex gap-2">
+        <button onclick="google.script.host.close()" class="flex-1 py-2 border border-gray-300 rounded text-sm text-gray-600 font-medium hover:bg-gray-100 transition">Cancel</button>
+        <button onclick="applyFormula()" class="flex-[2] py-2 btn-sheets-green rounded shadow-md active:scale-95 transition">Insert</button>
+      </div>
+      <button onclick="resetDefaults()" class="w-full py-2 bg-red-50 text-red-700 border border-red-200 rounded text-sm font-medium hover:bg-red-100 active:scale-95 transition">Reset to Defaults</button>
     </div>
   </div>
 
@@ -244,7 +247,7 @@
         <label class="compact-label !text-[9px]">Color ${i}</label>
         <div class="color-row">
           <input type="color" id="barColor${i}" value="${barColorDefaults[i-1]}" class="color-picker-sm rounded">
-          <input type="text" id="barColorText${i}" value="${barColorDefaults[i-1]}" class="input-style !p-1 !text-[9px] font-mono">
+          <input type="text" id="barColorText${i}" value="" placeholder="${barColorDefaults[i-1]}" class="input-style !p-1 !text-[9px] font-mono">
         </div>
       `;
       barGrid.appendChild(container);
@@ -262,8 +265,9 @@
       if (!picker || !text) return;
       picker.addEventListener('input', (e) => { text.value = e.target.value.toUpperCase(); generatePreview(); });
       text.addEventListener('input', (e) => {
-        const val = e.target.value;
+        const val = e.target.value.trim();
         if (/^#[0-9A-F]{6}$/i.test(val)) { picker.value = val; generatePreview(); }
+        else if (val === '') { generatePreview(); }
       });
     }
 
@@ -372,10 +376,33 @@
       ctx.restore();
     }
 
+    function resetDefaults() {
+      const textToClear = [
+        'lineColorText', 'lineWidth', 'lineYmin', 'lineYmax', 'lineXmin', 'lineXmax',
+        'barMax',
+        'colColorText', 'colNegText', 'colLowText', 'colHighText', 'colFirstText', 'colLastText',
+        'colYmin', 'colYmax', 'axisColorText'
+      ];
+      for (let i = 1; i <= 9; i++) textToClear.push(`barColorText${i}`);
+
+      textToClear.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+
+      document.getElementById('chartType').value = 'line';
+      document.getElementById('empty').value = 'ignore';
+      document.getElementById('nan').value = 'ignore';
+      document.getElementById('rtl').checked = false;
+      document.getElementById('hasAxis').checked = false;
+
+      updateOptionsUI();
+    }
+
     function generatePreview() {
       const range = document.getElementById('rangeInput').value || 'A1:E1';
       const type = document.getElementById('chartType').value;
-      const options = [`"charttype","${type}"`];
+      const options = [];
       const previewConfig = {};
 
       if (document.getElementById('empty').value !== 'ignore') options.push(`"empty","${document.getElementById('empty').value}"`);
@@ -383,9 +410,23 @@
       if (document.getElementById('rtl').checked) options.push(`"rtl",true`);
 
       if (type === 'line') {
-        previewConfig.color = document.getElementById('lineColor').value;
-        previewConfig.lineWidth = parseInt(document.getElementById('lineWidth').value) || 2;
-        options.push(`"color","${previewConfig.color}"`, `"linewidth",${previewConfig.lineWidth}`);
+        const lineColorText = document.getElementById('lineColorText').value.trim();
+        const lineWidth = document.getElementById('lineWidth').value;
+        
+        if (lineColorText) {
+          previewConfig.color = lineColorText;
+          options.push(`"color","${lineColorText}"`);
+        } else {
+          previewConfig.color = '#4285F4';
+        }
+        
+        if (lineWidth) {
+          previewConfig.lineWidth = parseInt(lineWidth);
+          options.push(`"linewidth",${previewConfig.lineWidth}`);
+        } else {
+          previewConfig.lineWidth = 2; // Default for preview
+        }
+
         ['ymin', 'ymax', 'xmin', 'xmax'].forEach(key => {
           const val = document.getElementById('line' + key.charAt(0).toUpperCase() + key.slice(1)).value;
           if (val) options.push(`"${key}",${val}`);
@@ -393,28 +434,66 @@
       } else if (type === 'bar') {
         previewConfig.barColors = [];
         for (let i = 1; i <= 9; i++) {
-          const c = document.getElementById(`barColor${i}`).value;
-          previewConfig.barColors.push(c);
-          options.push(`"color${i}","${c}"`);
+          const c = document.getElementById(`barColorText${i}`).value.trim();
+          if (c) {
+            previewConfig.barColors.push(c);
+            options.push(`"color${i}","${c}"`);
+          } else {
+            previewConfig.barColors.push(barColorDefaults[i-1]);
+          }
         }
         const max = document.getElementById('barMax').value;
         if (max) options.push(`"max",${max}`);
       } else {
-        previewConfig.color = document.getElementById('colColor').value;
-        previewConfig.negColor = document.getElementById('colNeg').value;
-        previewConfig.lowColor = document.getElementById('colLow').value;
-        previewConfig.highColor = document.getElementById('colHigh').value;
-        previewConfig.firstColor = document.getElementById('colFirst').value;
-        previewConfig.lastColor = document.getElementById('colLast').value;
+        const keys = [
+          {id: 'colColor', opt: 'color', fallback: '#4285F4'},
+          {id: 'colNeg', opt: 'negcolor', fallback: '#EA4335'},
+          {id: 'colLow', opt: 'lowcolor', fallback: '#FBBC04'},
+          {id: 'colHigh', opt: 'highcolor', fallback: '#34A853'},
+          {id: 'colFirst', opt: 'firstcolor', fallback: '#9333ea'},
+          {id: 'colLast', opt: 'lastcolor', fallback: '#f43f5e'}
+        ];
+        
+        keys.forEach(k => {
+          const val = document.getElementById(k.id + 'Text').value.trim();
+          if (val) {
+             previewConfig[k.id] = val;
+             options.push(`"${k.opt}","${val}"`);
+          } else {
+             previewConfig[k.id] = k.fallback;
+          }
+        });
+        
+        previewConfig.color = previewConfig.colColor;
+        previewConfig.negColor = previewConfig.colNeg;
+        previewConfig.lowColor = previewConfig.colLow;
+        previewConfig.highColor = previewConfig.colHigh;
+        previewConfig.firstColor = previewConfig.colFirst;
+        previewConfig.lastColor = previewConfig.colLast;
+
         previewConfig.hasAxis = document.getElementById('hasAxis').checked;
-        previewConfig.axisColor = document.getElementById('axisColor').value;
-        options.push(`"color","${previewConfig.color}"`, `"negcolor","${previewConfig.negColor}"`, `"lowcolor","${previewConfig.lowColor}"`, `"highcolor","${previewConfig.highColor}"`, `"firstcolor","${previewConfig.firstColor}"`, `"lastcolor","${previewConfig.lastColor}"`);
+        const axisColorText = document.getElementById('axisColorText').value.trim();
+
         if (document.getElementById('colYmin').value) options.push(`"ymin",${document.getElementById('colYmin').value}`);
         if (document.getElementById('colYmax').value) options.push(`"ymax",${document.getElementById('colYmax').value}`);
-        if (previewConfig.hasAxis) { options.push(`"axis",true`, `"axiscolor","${previewConfig.axisColor}"`); }
+        
+        if (previewConfig.hasAxis) { 
+          options.push(`"axis",true`);
+          if (axisColorText) {
+            options.push(`"axiscolor","${axisColorText}"`);
+            previewConfig.axisColor = axisColorText;
+          } else {
+            previewConfig.axisColor = '#000000';
+          }
+        }
       }
+
+      if (type !== 'line') {
+        options.unshift(`"charttype","${type}"`);
+      }
+
       drawPreview(type, previewConfig);
-      const formula = `=SPARKLINE(${range}, {${options.join('; ')}})`;
+      const formula = options.length > 0 ? `=SPARKLINE(${range}, {${options.join('; ')}})` : `=SPARKLINE(${range})`;
       document.getElementById('formulaPreview').innerText = formula;
       return formula;
     }
@@ -431,7 +510,7 @@
     window.onload = () => {
       fetchRange('rangeInput');
       canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
-      generatePreview();
+      resetDefaults();
     };
   </script>
 </body>
