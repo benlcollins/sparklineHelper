@@ -1,6 +1,6 @@
 ## Sparkline Helper for Google Sheets
 
-A professional-grade Sidebar tool for Google Sheets that allows you to visually design and insert complex [SPARKLINE functions](https://www.benlcollins.com/spreadsheets/sparklines-in-google-sheets/) with real-time data previews.
+A sidebar tool for Google Sheets that allows you to visually design and insert complex [SPARKLINE functions](https://www.benlcollins.com/spreadsheets/sparklines-in-google-sheets/) with real-time data previews.
 
 ![Sparkline Helper Demo](images/sparklineHelperDemoGif.gif)
 
