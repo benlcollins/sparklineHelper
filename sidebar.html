@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+    
+    .section-title { 
+      font-size: 0.65rem; 
+      font-weight: 700; 
+      color: #6b7280; 
+      text-transform: uppercase; 
+      letter-spacing: 0.05em; 
+      border-bottom: 1px solid #e5e7eb; 
+      padding-bottom: 4px; 
+      margin-bottom: 8px; 
+      margin-top: 12px; 
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    .section-title:hover { color: #374151; }
+    .section-title svg { transition: transform 0.2s; width: 10px; height: 10px; }
+    .section-title.collapsed svg { transform: rotate(-90deg); }
+    .section-content { transition: max-height 0.3s ease-out; overflow: hidden; }
+    .section-content.collapsed { display: none; }
+
+    .compact-label { font-size: 0.7rem; font-weight: 600; color: #374151; display: block; margin-bottom: 2px; }
+    .input-style { width: 100%; border-radius: 0.375rem; border: 1px solid #d1d5db; font-size: 0.75rem; padding: 4px 6px; outline: none; transition: border-color 0.2s; }
+    .input-style:focus { border-color: #0f9e59; ring: 1px #0f9e59; }
+    
+    .btn-sheets-green { background-color: #0f9e59; color: white; transition: background-color 0.2s; font-size: 0.75rem; font-weight: 600; }
+    .btn-sheets-green:hover { background-color: #0b7a44; }
+    
+    .color-row { display: flex; align-items: center; gap: 4px; }
+    .color-picker-sm { height: 1.25rem; width: 1.25rem; flex-shrink: 0; cursor: pointer; border: 1px solid #e5e7eb; }
+    
+    #chartCanvas { background: transparent; width: 100%; height: 50px; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 h-full overflow-y-auto">
+
+  <div class="p-3 space-y-4">
+    <header class="text-center pb-2">
+      <p class="text-[10px] text-gray-500 italic">Click cells in sheet then click "Get"</p>
+    </header>
+
+    <!-- Selection Controls -->
+    <div class="bg-white p-2 rounded-md border shadow-sm space-y-2">
+      <div>
+        <label class="compact-label">Data Range</label>
+        <div class="flex gap-1">
+          <input type="text" id="rangeInput" placeholder="A1:E1" class="input-style flex-1">
+          <button onclick="fetchRange('rangeInput')" class="btn-sheets-green px-2 py-1 rounded shadow-sm active:scale-95 transition">Get</button>
+        </div>
+      </div>
+      <div>
+        <label class="compact-label">Target Cell</label>
+        <div class="flex gap-1">
+          <input type="text" id="targetInput" placeholder="F1" class="input-style flex-1">
+          <button onclick="fetchRange('targetInput')" class="btn-sheets-green px-2 py-1 rounded shadow-sm active:scale-95 transition">Get</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Config -->
+    <div class="bg-white p-2 rounded-md border shadow-sm">
+      <label class="compact-label">Chart Type</label>
+      <select id="chartType" onchange="updateOptionsUI()" class="input-style bg-white mb-2">
+        <option value="line">Line (Trend)</option>
+        <option value="bar">Bar (Progress)</option>
+        <option value="column">Column (Comparison)</option>
+        <option value="winloss">Winloss (Boolean)</option>
+      </select>
+
+      <!-- Global Settings -->
+      <div class="section-title collapsed" onclick="toggleSection(this)">
+        Global Settings
+        <svg viewBox="0 0 20 20" fill="currentColor"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+      </div>
+      <div class="section-content collapsed">
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label class="compact-label !text-[10px]">Empty Cells</label>
+            <select id="empty" class="input-style !text-[10px]"><option value="ignore">Ignore</option><option value="zero">Zero</option></select>
+          </div>
+          <div>
+            <label class="compact-label !text-[10px]">Non-Numeric</label>
+            <select id="nan" class="input-style !text-[10px]"><option value="ignore">Ignore</option><option value="convert">To 0</option></select>
+          </div>
+        </div>
+        <label class="flex items-center text-[11px] font-medium cursor-pointer">
+          <input type="checkbox" id="rtl" class="mr-1"> Right-to-Left
+        </label>
+      </div>
+
+      <!-- Line Specific -->
+      <div id="lineOptions" class="space-y-2">
+        <div class="section-title collapsed" onclick="toggleSection(this)">
+          Line Styling
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+        </div>
+        <div class="section-content collapsed">
+          <div class="grid grid-cols-2 gap-2">
+            <div class="flex flex-col">
+              <label class="compact-label !text-[10px]">Color</label>
+              <div class="color-row">
+                <input type="color" id="lineColor" value="#4285F4" class="color-picker-sm rounded">
+                <input type="text" id="lineColorText" value="#4285F4" class="input-style !p-1 !text-[9px] font-mono">
+              </div>
+            </div>
+            <div class="flex flex-col">
+              <label class="compact-label !text-[10px]">Width</label>
+              <input type="number" id="lineWidth" value="2" min="1" max="10" class="input-style">
+            </div>
+          </div>
+        </div>
+        
+        <div class="section-title collapsed" onclick="toggleSection(this)">
+          Axes & Scaling
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+        </div>
+        <div class="section-content collapsed">
+          <div class="grid grid-cols-2 gap-2">
+            <input type="number" id="lineYmin" placeholder="Y Min" class="input-style !text-[10px]">
+            <input type="number" id="lineYmax" placeholder="Y Max" class="input-style !text-[10px]">
+            <input type="number" id="lineXmin" placeholder="X Min" class="input-style !text-[10px]">
+            <input type="number" id="lineXmax" placeholder="X Max" class="input-style !text-[10px]">
+          </div>
+        </div>
+      </div>
+
+      <!-- Bar Specific -->
+      <div id="barOptions" class="hidden space-y-2">
+        <div class="section-title collapsed" onclick="toggleSection(this)">
+          Bar Colors (Up to 9)
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+        </div>
+        <div class="section-content collapsed">
+          <div class="grid grid-cols-2 gap-x-2 gap-y-2" id="barColorGrid"></div>
+          <label class="compact-label !text-[10px] mt-2">Max Limit</label>
+          <input type="number" id="barMax" placeholder="Auto" class="input-style">
+        </div>
+      </div>
+
+      <!-- Column / Winloss Specific -->
+      <div id="columnOptions" class="hidden space-y-2">
+        <div class="section-title collapsed" onclick="toggleSection(this)">
+          Column Styling
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+        </div>
+        <div class="section-content collapsed">
+          <div class="grid grid-cols-2 gap-1">
+            <div>
+              <label class="compact-label !text-[9px]">Base</label>
+              <div class="color-row"><input type="color" id="colColor" value="#4285F4" class="color-picker-sm rounded"><input type="text" id="colColorText" value="#4285F4" class="input-style !p-1 !text-[9px] font-mono"></div>
+            </div>
+            <div>
+              <label class="compact-label !text-[9px]">Neg</label>
+              <div class="color-row"><input type="color" id="colNeg" value="#EA4335" class="color-picker-sm rounded"><input type="text" id="colNegText" value="#EA4335" class="input-style !p-1 !text-[9px] font-mono"></div>
+            </div>
+            <div>
+              <label class="compact-label !text-[9px]">Low</label>
+              <div class="color-row"><input type="color" id="colLow" value="#FBBC04" class="color-picker-sm rounded"><input type="text" id="colLowText" value="#FBBC04" class="input-style !p-1 !text-[9px] font-mono"></div>
+            </div>
+            <div>
+              <label class="compact-label !text-[9px]">High</label>
+              <div class="color-row"><input type="color" id="colHigh" value="#34A853" class="color-picker-sm rounded"><input type="text" id="colHighText" value="#34A853" class="input-style !p-1 !text-[9px] font-mono"></div>
+            </div>
+            <div>
+              <label class="compact-label !text-[9px]">First</label>
+              <div class="color-row"><input type="color" id="colFirst" value="#9333ea" class="color-picker-sm rounded"><input type="text" id="colFirstText" value="#9333ea" class="input-style !p-1 !text-[9px] font-mono"></div>
+            </div>
+            <div>
+              <label class="compact-label !text-[9px]">Last</label>
+              <div class="color-row"><input type="color" id="colLast" value="#f43f5e" class="color-picker-sm rounded"><input type="text" id="colLastText" value="#f43f5e" class="input-style !p-1 !text-[9px] font-mono"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title collapsed" onclick="toggleSection(this)">
+          Axes
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+        </div>
+        <div class="section-content collapsed">
+          <div class="grid grid-cols-2 gap-2">
+            <input type="number" id="colYmin" placeholder="Y Min" class="input-style !text-[10px]">
+            <input type="number" id="colYmax" placeholder="Y Max" class="input-style !text-[10px]">
+          </div>
+          <div class="flex items-center justify-between mt-2">
+            <label class="flex items-center text-[10px] font-medium cursor-pointer">
+              <input type="checkbox" id="hasAxis" class="mr-1"> Axis
+            </label>
+            <div class="color-row">
+              <input type="color" id="axisColor" value="#000000" class="color-picker-sm rounded">
+              <input type="text" id="axisColorText" value="#000000" class="input-style !p-1 !text-[9px] font-mono !w-16">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Section -->
+    <div class="bg-white rounded-md shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-gray-50 px-2 py-1 flex justify-between items-center border-b border-gray-200">
+        <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Visual Preview</span>
+        <span id="previewDataSource" class="text-[9px] text-gray-400 italic">Mock Data</span>
+      </div>
+      <div class="p-2 flex items-center justify-center">
+        <canvas id="chartCanvas"></canvas>
+      </div>
+      <div class="bg-gray-50 p-2 border-t border-gray-200">
+        <label class="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Formula</label>
+        <code id="formulaPreview" class="text-[10px] leading-tight break-all text-blue-700 font-mono block font-semibold">=SPARKLINE(...)</code>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-2 pt-2 pb-4">
+      <button onclick="google.script.host.close()" class="flex-1 py-2 border border-gray-300 rounded text-sm text-gray-600 font-medium hover:bg-gray-100 transition">Cancel</button>
+      <button onclick="applyFormula()" class="flex-[2] py-2 btn-sheets-green rounded shadow-md active:scale-95 transition">Insert</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('chartCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let currentData = [];
+    const mockData = [10, 50, 20, 90, 40, 70, 30];
+    const mockBarData = [15, 25, 20, 15, 10, 5, 4, 3, 3];
+    const mockColData = [20, -15, 45, 10, 60, -30, 25];
+    const barColorDefaults = ['#4285F4', '#EA4335', '#FBBC04', '#34A853', '#9333ea', '#f43f5e', '#22d3ee', '#fb923c', '#94a3b8'];
+
+    const barGrid = document.getElementById('barColorGrid');
+    for (let i = 1; i <= 9; i++) {
+      const container = document.createElement('div');
+      container.innerHTML = `
+        <label class="compact-label !text-[9px]">Color ${i}</label>
+        <div class="color-row">
+          <input type="color" id="barColor${i}" value="${barColorDefaults[i-1]}" class="color-picker-sm rounded">
+          <input type="text" id="barColorText${i}" value="${barColorDefaults[i-1]}" class="input-style !p-1 !text-[9px] font-mono">
+        </div>
+      `;
+      barGrid.appendChild(container);
+    }
+
+    function toggleSection(header) {
+      const content = header.nextElementSibling;
+      header.classList.toggle('collapsed');
+      content.classList.toggle('collapsed');
+    }
+
+    function setupColorSync(pickerId, textId) {
+      const picker = document.getElementById(pickerId);
+      const text = document.getElementById(textId);
+      if (!picker || !text) return;
+      picker.addEventListener('input', (e) => { text.value = e.target.value.toUpperCase(); generatePreview(); });
+      text.addEventListener('input', (e) => {
+        const val = e.target.value;
+        if (/^#[0-9A-F]{6}$/i.test(val)) { picker.value = val; generatePreview(); }
+      });
+    }
+
+    setupColorSync('lineColor', 'lineColorText');
+    setupColorSync('colColor', 'colColorText');
+    setupColorSync('colNeg', 'colNegText');
+    setupColorSync('colLow', 'colLowText');
+    setupColorSync('colHigh', 'colHighText');
+    setupColorSync('colFirst', 'colFirstText');
+    setupColorSync('colLast', 'colLastText');
+    setupColorSync('axisColor', 'axisColorText');
+    for (let i = 1; i <= 9; i++) { setupColorSync(`barColor${i}`, `barColorText${i}`); }
+
+    function fetchRange(inputId) {
+      google.script.run.withSuccessHandler(r => {
+        document.getElementById(inputId).value = r;
+        if (inputId === 'rangeInput') {
+          google.script.run.withSuccessHandler(data => {
+            currentData = data;
+            document.getElementById('previewDataSource').innerText = (data && data.length > 0) ? 'Sheet Data' : 'Mock Data';
+            generatePreview();
+          }).getSelectedData();
+        } else {
+          generatePreview();
+        }
+      }).getSelectedRange();
+    }
+
+    function updateOptionsUI() {
+      const type = document.getElementById('chartType').value;
+      ['lineOptions', 'barOptions', 'columnOptions'].forEach(id => {
+        document.getElementById(id).classList.toggle('hidden', !id.startsWith(type === 'winloss' ? 'column' : type));
+      });
+      generatePreview();
+    }
+
+    function drawPreview(type, config) {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const padding = 6;
+      const w = canvas.width - (padding * 2);
+      const h = canvas.height - (padding * 2);
+      const rtl = document.getElementById('rtl').checked;
+      let activeData = (currentData && currentData.length > 0) ? currentData : null;
+      
+      ctx.save();
+      if (rtl) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+      ctx.translate(padding, padding);
+
+      if (type === 'line') {
+        const data = activeData || mockData;
+        const min = Math.min(...data); const max = Math.max(...data);
+        const range = (max - min) || 1;
+        ctx.strokeStyle = config.color; ctx.lineWidth = config.lineWidth; ctx.lineJoin = 'round';
+        ctx.beginPath();
+        const step = w / (data.length - 1);
+        data.forEach((val, i) => {
+          const x = i * step; const y = h - ((val - min) / range * h);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      } else if (type === 'bar') {
+        const data = activeData || mockBarData;
+        const barH = h * 0.6; const yPos = (h - barH) / 2;
+        let currentX = 0; const total = data.reduce((a, b) => a + b, 0);
+        data.forEach((val, i) => {
+          if (i >= 9) return;
+          const segmentW = (val / total) * w;
+          ctx.fillStyle = config.barColors[i] || '#ccc';
+          ctx.fillRect(currentX, yPos, segmentW, barH);
+          currentX += segmentW;
+        });
+      } else if (type === 'column' || type === 'winloss') {
+        const data = activeData || mockColData;
+        const step = w / data.length; const barWidth = step * 0.7;
+        const isWinloss = type === 'winloss';
+
+        // Detect min and max for lowColor and highColor
+        const minVal = Math.min(...data);
+        const maxVal = Math.max(...data);
+
+        if (config.hasAxis) {
+          ctx.strokeStyle = config.axisColor; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+        }
+        const maxAbs = Math.max(...data.map(Math.abs)) || 1;
+        data.forEach((val, i) => {
+          const x = i * step + (step - barWidth) / 2;
+          let barHeight, y; 
+          
+          // Color logic with marker precedence: base/neg -> high/low -> first/last
+          ctx.fillStyle = config.color;
+          if (val < 0) ctx.fillStyle = config.negColor;
+          
+          if (val === minVal) ctx.fillStyle = config.lowColor;
+          if (val === maxVal) ctx.fillStyle = config.highColor;
+          if (i === 0) ctx.fillStyle = config.firstColor;
+          if (i === data.length - 1) ctx.fillStyle = config.lastColor;
+          
+          if (isWinloss) { barHeight = h / 3; y = val > 0 ? h/2 - barHeight - 2 : h/2 + 2; }
+          else { barHeight = (Math.abs(val) / maxAbs) * (h / 2); y = val > 0 ? h/2 - barHeight : h/2; }
+          ctx.fillRect(x, y, barWidth, barHeight);
+        });
+      }
+      ctx.restore();
+    }
+
+    function generatePreview() {
+      const range = document.getElementById('rangeInput').value || 'A1:E1';
+      const type = document.getElementById('chartType').value;
+      const options = [`"charttype","${type}"`];
+      const previewConfig = {};
+
+      if (document.getElementById('empty').value !== 'ignore') options.push(`"empty","${document.getElementById('empty').value}"`);
+      if (document.getElementById('nan').value !== 'ignore') options.push(`"nan","${document.getElementById('nan').value}"`);
+      if (document.getElementById('rtl').checked) options.push(`"rtl",true`);
+
+      if (type === 'line') {
+        previewConfig.color = document.getElementById('lineColor').value;
+        previewConfig.lineWidth = parseInt(document.getElementById('lineWidth').value) || 2;
+        options.push(`"color","${previewConfig.color}"`, `"linewidth",${previewConfig.lineWidth}`);
+        ['ymin', 'ymax', 'xmin', 'xmax'].forEach(key => {
+          const val = document.getElementById('line' + key.charAt(0).toUpperCase() + key.slice(1)).value;
+          if (val) options.push(`"${key}",${val}`);
+        });
+      } else if (type === 'bar') {
+        previewConfig.barColors = [];
+        for (let i = 1; i <= 9; i++) {
+          const c = document.getElementById(`barColor${i}`).value;
+          previewConfig.barColors.push(c);
+          options.push(`"color${i}","${c}"`);
+        }
+        const max = document.getElementById('barMax').value;
+        if (max) options.push(`"max",${max}`);
+      } else {
+        previewConfig.color = document.getElementById('colColor').value;
+        previewConfig.negColor = document.getElementById('colNeg').value;
+        previewConfig.lowColor = document.getElementById('colLow').value;
+        previewConfig.highColor = document.getElementById('colHigh').value;
+        previewConfig.firstColor = document.getElementById('colFirst').value;
+        previewConfig.lastColor = document.getElementById('colLast').value;
+        previewConfig.hasAxis = document.getElementById('hasAxis').checked;
+        previewConfig.axisColor = document.getElementById('axisColor').value;
+        options.push(`"color","${previewConfig.color}"`, `"negcolor","${previewConfig.negColor}"`, `"lowcolor","${previewConfig.lowColor}"`, `"highcolor","${previewConfig.highColor}"`, `"firstcolor","${previewConfig.firstColor}"`, `"lastcolor","${previewConfig.lastColor}"`);
+        if (document.getElementById('colYmin').value) options.push(`"ymin",${document.getElementById('colYmin').value}`);
+        if (document.getElementById('colYmax').value) options.push(`"ymax",${document.getElementById('colYmax').value}`);
+        if (previewConfig.hasAxis) { options.push(`"axis",true`, `"axiscolor","${previewConfig.axisColor}"`); }
+      }
+      drawPreview(type, previewConfig);
+      const formula = `=SPARKLINE(${range}, {${options.join('; ')}})`;
+      document.getElementById('formulaPreview').innerText = formula;
+      return formula;
+    }
+
+    function applyFormula() {
+      const formula = generatePreview();
+      const targetCell = document.getElementById('targetInput').value;
+      google.script.run.withSuccessHandler(() => {
+        google.script.host.close();
+      }).insertFormula(formula, targetCell);
+    }
+
+    document.querySelectorAll('input, select').forEach(el => el.addEventListener('input', generatePreview));
+    window.onload = () => {
+      fetchRange('rangeInput');
+      canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+      generatePreview();
+    };
+  </script>
+</body>
+</html>
